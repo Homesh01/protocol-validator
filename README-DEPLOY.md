@@ -6,22 +6,25 @@
 - Wrangler CLI (`npm install -g wrangler` or use `pnpm exec wrangler`)
 - Logged in: `wrangler login`
 
-## Step 1: Create KV Namespace
+## Step 1: Create KV Namespace (Required before deploy)
+
+**Option A: Via CLI**
 
 ```bash
 cd protocol-validator
-
-# Create production KV namespace
+wrangler login   # if not already logged in
 wrangler kv namespace create AUTH_KV
 ```
 
-You'll get output like:
-```
-Add the following to your wrangler.json:
-{ "binding": "AUTH_KV", "id": "abc123..." }
-```
+Copy the `id` from the output and replace `REPLACE_WITH_KV_NAMESPACE_ID` in `wrangler.json`.
 
-Update `wrangler.json` — replace `REPLACE_WITH_KV_NAMESPACE_ID` with the returned `id`.
+**Option B: Via Cloudflare Dashboard**
+
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → **KV**
+2. Click **Create namespace**
+3. Name it `AUTH_KV` (or any name)
+4. Copy the **Namespace ID** from the list
+5. In `wrangler.json`, replace `REPLACE_WITH_KV_NAMESPACE_ID` with that ID
 
 ## Step 2: Set Secrets
 
