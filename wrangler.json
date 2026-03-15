@@ -1,6 +1,6 @@
 {
 	"name": "protocol-validator",
-	"compatibility_date": "2025-10-08",
+	"compatibility_date": "2025-07-18",
 	"main": "./server.ts",
 	"assets": {
 		"directory": "./build/client"
@@ -8,5 +8,11 @@
 	"observability": {
 		"enabled": true
 	},
-	"upload_source_maps": true
+	"upload_source_maps": true,
+	"kv_namespaces": [
+		{
+			"binding": "AUTH_KV",
+			"id": "REPLACE_WITH_KV_NAMESPACE_ID"
+		}
+	]
 }

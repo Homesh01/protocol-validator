@@ -2,10 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+	:root {
+		--background: 0 0% 4%;
+		--foreground: 0 0% 100%;
+		--primary: 262 83% 58%;
+		--primary-foreground: 0 0% 100%;
+		--secondary: 262 83% 58%;
+		--muted: 0 0% 15%;
+		--muted-foreground: 0 0% 65%;
+		--accent: 262 83% 58%;
+		--border: 0 0% 20%;
+		--input: 0 0% 20%;
+		--ring: 262 83% 58%;
+		--radius: 0.5rem;
+	}
+}
+
+@layer base {
+	* {
+		@apply border-border;
+	}
+	body {
+		@apply bg-[#0a0612] text-white;
+	}
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
 html,
 body {
-	@apply bg-white dark:bg-gray-950;
-
 	@media (prefers-color-scheme: dark) {
 		color-scheme: dark;
 	}
