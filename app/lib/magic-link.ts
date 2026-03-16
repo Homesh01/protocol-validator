@@ -103,14 +103,26 @@ export async function handleMagicLinkRequest(
 	});
 
 	if (error) {
-		console.error("Resend error:", error);
-		return new Response(
-			JSON.stringify({
-				error: "Failed to send magic link. Please try again later.",
-				authorized: true,
-			}),
-			{ status: 500, headers: { "Content-Type": "application/json" } }
-		);
+		const errMsg = typeof error === "object" && error !== null && "message" in error
+			? String((error as { message?: unknown }).message)
+			: String(error);
+		console.error("[MagicLink] Resend failed:", errMsg, "Full error:", JSON.stringify(error));
+
+		// Debug: include actual Resend error when admin secret is provided (for troubleshooting)
+		const adminSecret = request.headers.get("X-Admin-Secret");
+		const isDebug = adminSecret && env.ADMIN_SECRET && adminSecret === env.ADMIN_SECRET;
+		const body: { error: string; authorized: boolean; debug?: string } = {
+			error: "Failed to send magic link. Please try again later.",
+			authorized: true,
+		};
+		if (isDebug) {
+			body.debug = errMsg || JSON.stringify(error);
+		}
+
+		return new Response(JSON.stringify(body), {
+			status: 500,
+			headers: { "Content-Type": "application/json" },
+		});
 	}
 
 	return new Response(
