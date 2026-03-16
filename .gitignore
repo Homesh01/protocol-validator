@@ -200,3 +200,6 @@ dist
 
 ### Remix ###
 /build/
+
+### Protocol Validator ###
+set-email.txt
