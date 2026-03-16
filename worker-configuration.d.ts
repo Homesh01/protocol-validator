@@ -7,6 +7,8 @@ interface Env {
 	EMAIL_WHITELIST?: string;
 	/** Resend API key for sending magic link emails */
 	RESEND_API_KEY: string;
+	/** From address for magic link emails (e.g. noreply@yourdomain.com). Required for production. */
+	MAGIC_LINK_FROM?: string;
 	/** Base URL of the app for magic links */
 	APP_URL: string;
 	/** Secret for admin API (X-Admin-Secret header). Required for /api/admin/whitelist */

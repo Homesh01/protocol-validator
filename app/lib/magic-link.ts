@@ -92,7 +92,7 @@ export async function handleMagicLinkRequest(
 
 	const resend = new Resend(apiKey);
 	const { error } = await resend.emails.send({
-		from: "Protocol Validator <onboarding@resend.dev>",
+		from: env.MAGIC_LINK_FROM || "Protocol Validator <onboarding@resend.dev>",
 		to: email,
 		subject: "Your Protocol Validator login link",
 		html: `
@@ -108,21 +108,14 @@ export async function handleMagicLinkRequest(
 			: String(error);
 		console.error("[MagicLink] Resend failed:", errMsg, "Full error:", JSON.stringify(error));
 
-		// Debug: include actual Resend error when admin secret is provided (for troubleshooting)
-		const adminSecret = request.headers.get("X-Admin-Secret");
-		const isDebug = adminSecret && env.ADMIN_SECRET && adminSecret === env.ADMIN_SECRET;
-		const body: { error: string; authorized: boolean; debug?: string } = {
-			error: "Failed to send magic link. Please try again later.",
-			authorized: true,
-		};
-		if (isDebug) {
-			body.debug = errMsg || JSON.stringify(error);
-		}
-
-		return new Response(JSON.stringify(body), {
-			status: 500,
-			headers: { "Content-Type": "application/json" },
-		});
+		return new Response(
+			JSON.stringify({
+				error: "Failed to send magic link. Please try again later.",
+				authorized: true,
+				resendError: errMsg || JSON.stringify(error),
+			}),
+			{ status: 500, headers: { "Content-Type": "application/json" } }
+		);
 	}
 
 	return new Response(

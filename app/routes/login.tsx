@@ -44,7 +44,8 @@ export default function Login() {
 				setMessage(data.message || "Check your email for the magic link.");
 			} else {
 				setStatus("error");
-				setMessage(data.error || "Something went wrong.");
+				const msg = data.error || "Something went wrong.";
+				setMessage(data.resendError ? `${msg} (${data.resendError})` : msg);
 			}
 		} catch {
 			setStatus("error");

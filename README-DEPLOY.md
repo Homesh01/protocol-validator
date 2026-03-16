@@ -40,6 +40,9 @@ wrangler secret put ADMIN_SECRET
 
 # Optional: initial whitelist when KV is empty
 wrangler secret put EMAIL_WHITELIST
+
+# Required for production: verified domain sender (e.g. Protocol Validator <noreply@yourdomain.com>)
+wrangler secret put MAGIC_LINK_FROM
 ```
 
 When prompted, enter each value. Use strong, random values for `ADMIN_SECRET` in production.
@@ -48,7 +51,11 @@ When prompted, enter each value. Use strong, random values for `ADMIN_SECRET` in
 
 1. Go to [resend.com/domains](https://resend.com/domains)
 2. Add and verify your domain (e.g. `yourdomain.com`)
-3. Update `app/lib/magic-link.ts` — change the `from` address from `onboarding@resend.dev` to your verified domain (e.g. `noreply@yourdomain.com`)
+3. Set the `MAGIC_LINK_FROM` secret with your verified domain address:
+   ```bash
+   wrangler secret put MAGIC_LINK_FROM
+   # Enter: Protocol Validator <noreply@yourdomain.com>
+   ```
 
 ## Step 4: Build and Deploy
 
@@ -92,7 +99,7 @@ wrangler kv:key put --binding AUTH_KV "whitelist:emails" '["admin@yourcompany.co
 - [ ] `RESEND_API_KEY` secret set
 - [ ] `APP_URL` secret set (production URL)
 - [ ] `ADMIN_SECRET` secret set
-- [ ] Resend domain verified; `from` address updated in code
+- [ ] Resend domain verified; `MAGIC_LINK_FROM` secret set
 - [ ] Build succeeds
 - [ ] Deploy succeeds
 - [ ] Whitelist seeded with at least one email
