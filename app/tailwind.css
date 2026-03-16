@@ -38,3 +38,22 @@ body {
 		color-scheme: dark;
 	}
 }
+
+/* Lighter scrollbar for summary table */
+.summary-table-scroll {
+	scrollbar-color: #9ca3af #374151;
+}
+.summary-table-scroll::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+.summary-table-scroll::-webkit-scrollbar-track {
+	background: #374151;
+}
+.summary-table-scroll::-webkit-scrollbar-thumb {
+	background: #9ca3af;
+	border-radius: 4px;
+}
+.summary-table-scroll::-webkit-scrollbar-thumb:hover {
+	background: #d1d5db;
+}
