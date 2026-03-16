@@ -24,27 +24,15 @@ export default function Index() {
 					</p>
 				</header>
 				<div className="rounded-2xl border border-gray-700 bg-gray-900/50 p-8">
-					<div className="mb-4 flex items-center justify-between">
-						<p className="text-gray-300">
-							You are signed in. Access the validator tools below.
-						</p>
-						<a
-							href="/logout"
-							className="text-sm text-gray-400 hover:text-[#6F44FF] transition-colors"
-						>
-							Sign out
-						</a>
-					</div>
-					<ul className="space-y-2">
-						<li>
-							<a
-								className="text-primary hover:text-[#6F44FF] transition-colors"
-								href="#"
-							>
-								Coming soon
-							</a>
-						</li>
-					</ul>
+					<p className="mb-4 text-gray-300">
+						You are signed in. Access the validator tools below.
+					</p>
+					<a
+						href="/logout"
+						className="text-sm text-gray-400 hover:text-[#6F44FF] transition-colors"
+					>
+						Sign out
+					</a>
 				</div>
 			</div>
 		</div>
