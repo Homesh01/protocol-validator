@@ -11,6 +11,7 @@ import {
 } from "./app/lib/magic-link";
 import { handleAdminWhitelist } from "./app/lib/admin-whitelist";
 import { clearSessionCookie } from "./app/lib/auth";
+import { handleValidationApi } from "./app/lib/validation-http";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const handleRemixRequest = createRequestHandler(build as any as ServerBuild);
@@ -29,6 +30,10 @@ export default {
 			}
 			if (pathname === "/api/admin/whitelist") {
 				return handleAdminWhitelist(request, env);
+			}
+			const validationResponse = await handleValidationApi(request, env, ctx);
+			if (validationResponse) {
+				return validationResponse;
 			}
 			if (pathname === "/logout") {
 				const redirect = Response.redirect(
@@ -71,7 +76,25 @@ export default {
 			});
 			return await handleRemixRequest(request, loadContext);
 		} catch (error) {
-			console.log(error);
+			const path = new URL(request.url).pathname;
+			console.error(
+				JSON.stringify({
+					ts: new Date().toISOString(),
+					level: "error",
+					msg: "worker_fetch_unhandled",
+					service: "protocol-validator",
+					path,
+					method: request.method,
+					err:
+						error instanceof Error
+							? {
+									name: error.name,
+									message: error.message.slice(0, 800),
+									stack: error.stack?.slice(0, 1200),
+								}
+							: { message: String(error).slice(0, 800) },
+				})
+			);
 			return new Response("An unexpected error occurred", { status: 500 });
 		}
 	},

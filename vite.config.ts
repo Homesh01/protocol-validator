@@ -1,4 +1,24 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+
+/** Chrome DevTools probes this URL; without a handler Remix logs a scary 404 in dev. */
+function chromeDevToolsWellKnown(): Plugin {
+	return {
+		name: "chrome-devtools-well-known",
+		configureServer(server) {
+			server.middlewares.use((req, res, next) => {
+				const path = req.url?.split("?")[0] ?? "";
+				if (
+					path === "/.well-known/appspecific/com.chrome.devtools.json"
+				) {
+					res.setHeader("Content-Type", "application/json");
+					res.end("{}");
+					return;
+				}
+				next();
+			});
+		},
+	};
+}
 import {
 	vitePlugin as remix,
 	cloudflareDevProxyVitePlugin,
@@ -14,6 +34,7 @@ declare module "@remix-run/cloudflare" {
 
 export default defineConfig({
 	plugins: [
+		chromeDevToolsWellKnown(),
 		cloudflareDevProxyVitePlugin({
 			getLoadContext,
 		}),

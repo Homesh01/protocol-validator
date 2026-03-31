@@ -1,117 +1,136 @@
 import { Fragment, useRef, useState } from "react";
 import type { MetaFunction } from "@remix-run/cloudflare";
+import type { ValidationReport, ValidationResultRow } from "~/lib/validation/types";
 
 export const meta: MetaFunction = () => {
 	return [
 		{ title: "Protocol Validator | Insynctrials" },
 		{
 			name: "description",
-			content: "Validate and structure trial protocol requirements.",
+			content:
+				"Upload your trial protocol and lab manual—see whether required sample types line up before startup.",
 		},
 	];
 };
 
-type AnalysisRow = {
-	analysis: string;
-	sample: string;
-	timepoints: string[];
-	destination: string;
-};
+function statusStyles(status: ValidationResultRow["status"]): string {
+	switch (status) {
+		case "aligned":
+			return "bg-emerald-900/40 text-emerald-300 border-emerald-700/50";
+		case "conflict":
+			return "bg-amber-900/40 text-amber-200 border-amber-700/50";
+		case "protocol_only":
+			return "bg-sky-900/40 text-sky-200 border-sky-700/50";
+		case "lab_only":
+			return "bg-rose-900/40 text-rose-200 border-rose-700/50";
+		default:
+			return "bg-gray-800 text-gray-300 border-gray-600";
+	}
+}
 
-// Mock data – replace with parsed document output when processing is implemented
-const MOCK_SUMMARY_DATA: AnalysisRow[] = [
-	{
-		analysis: "Fluorescence in situ hybridisation (FISH) and Gene expression profiling",
-		sample: "Formalin-fixed and paraffin-embedded (FFPE) tissue specimens (blocks)",
-		timepoints: [
-			"Archival Tumour biopsy at first relapse (if available) or diagnostic biopsy. Send following patient registration",
-			"Repeat tumour biopsy after 8 cycles if patient is PET positive and has given optional consent",
-			"Repeat tumour biopsy at relapse if clinically indicated",
-		],
-		destination: "HMDS, Leeds",
-	},
-	{
-		analysis: "Immunophenotyping",
-		sample: "Peripheral blood in EDTA",
-		timepoints: [
-			"50ml within 3 days prior to start of cycle 1",
-			"20ml within 3 days prior to start of cycle 2",
-			"20ml within 3 days prior to start of cycle 4",
-			"20ml within 3 days prior to start of cycle 6",
-			"20ml within 3 days prior to start of cycle 8",
-			"20ml at the 1 month post-treatment follow up visit",
-		],
-		destination: "Weatherall Institute of Molecular Medicine, Oxford",
-	},
-	{
-		analysis: "TARC (CCL17) analysis",
-		sample: "Peripheral blood in serum gel tube",
-		timepoints: [
-			"5ml within 3 days prior to start of cycle 1",
-			"5ml within 3 days prior to start of cycle 2",
-			"5ml within 3 days prior to start of cycle 4",
-			"5ml within 3 days prior to start of cycle 6",
-			"5ml within 3 days prior to start of cycle 8",
-			"5ml at the 1 month post-treatment follow up visit",
-		],
-		destination: "Weatherall Institute of Molecular Medicine, Oxford",
-	},
-	{
-		analysis: "Pharmacokinetic (PK) sampling",
-		sample: "Plasma in EDTA tubes (K2EDTA)",
-		timepoints: [
-			"Pre-dose and 1, 2, 4, 6, 8, 24 hours post-dose at cycle 1 day 1",
-			"Pre-dose at cycle 1 day 15 and cycle 2 day 1",
-			"Pre-dose at cycle 4 day 1 and cycle 6 day 1",
-			"Pre-dose at end of treatment visit",
-		],
-		destination: "Central Lab, Covance",
-	},
-	{
-		analysis: "Circulating tumour DNA (ctDNA)",
-		sample: "Peripheral blood in Streck Cell-Free DNA BCT tubes",
-		timepoints: [
-			"20ml at screening (within 28 days prior to cycle 1)",
-			"20ml within 3 days prior to cycle 1 day 1",
-			"20ml at cycle 8 day 1",
-			"20ml at progression or end of treatment",
-		],
-		destination: "Guardant Health, Redwood City",
-	},
-	{
-		analysis: "Hematology and clinical chemistry",
-		sample: "Peripheral blood in EDTA (full blood count) and serum gel tube (chemistry)",
-		timepoints: [
-			"Within 7 days prior to cycle 1",
-			"Day 1 of each cycle",
-			"Day 15 of cycle 1",
-			"At end of treatment and 30-day follow-up",
-		],
-		destination: "Local laboratory / Central Lab",
-	},
-	{
-		analysis: "PD-L1 expression and tumour mutational burden",
-		sample: "FFPE tumour tissue blocks or unstained slides",
-		timepoints: [
-			"Archival tissue at screening (if available within 12 months)",
-			"Fresh biopsy at baseline if archival tissue not available",
-			"Optional tumour biopsy at progression",
-		],
-		destination: "Foundation Medicine, Cambridge",
-	},
-	{
-		analysis: "Anti-drug antibody (ADA) and neutralizing antibody (NAb)",
-		sample: "Serum in plain tube (no gel)",
-		timepoints: [
-			"Pre-dose at cycle 1 day 1",
-			"Pre-dose at cycle 3 day 1 and cycle 6 day 1",
-			"At end of treatment and 90-day follow-up",
-		],
-		destination: "Q2 Solutions, Durham",
-	},
-];
+function statusLabel(status: ValidationResultRow["status"]): string {
+	switch (status) {
+		case "aligned":
+			return "Aligned";
+		case "conflict":
+			return "Conflict";
+		case "protocol_only":
+			return "Only in protocol (legacy)";
+		case "lab_only":
+			return "Not in trial protocol";
+		default:
+			return status;
+	}
+}
 
-function SummaryTable({ rows }: { rows: AnalysisRow[] }) {
+function rowTitle(r: ValidationResultRow): string {
+	const a = r.analysis?.trim();
+	if (a) return a;
+	return r.labSample || r.protocolSample || "—";
+}
+
+function SourceCitation({
+	title,
+	page,
+	section,
+	quote,
+	variant,
+}: {
+	title: string;
+	page?: number;
+	section?: string;
+	quote?: string;
+	variant: "protocol" | "lab";
+}) {
+	const hasLocation =
+		page != null ||
+		Boolean(section?.trim()) ||
+		Boolean(quote?.trim());
+	if (!hasLocation) {
+		return (
+			<p className="mt-3 border-t border-gray-700/50 pt-3 text-xs text-gray-500">
+				No page, section, or quote was captured for this row. If the PDF is
+				image-based, try a text-based export; otherwise re-run validation after
+				updates to extraction.
+			</p>
+		);
+	}
+	return (
+		<div className="mt-3 space-y-2 border-t border-gray-700/50 pt-3 text-xs text-gray-400">
+			<p className="font-semibold uppercase tracking-wider text-gray-500">
+				{title}
+			</p>
+			<ul className="list-none space-y-1.5 pl-0">
+				{page != null && (
+					<li>
+						<span className="text-gray-500">Page: </span>
+						<span className="text-gray-300">{page}</span>
+					</li>
+				)}
+				{section?.trim() && (
+					<li>
+						<span className="text-gray-500">Section / table: </span>
+						<span className="text-gray-300">{section.trim()}</span>
+					</li>
+				)}
+				{quote?.trim() && (
+					<li>
+						<span className="mb-1 block text-gray-500">Excerpt:</span>
+						<blockquote
+							className={`border-l-2 pl-3 text-gray-300 ${
+								variant === "lab"
+									? "border-rose-600/45"
+									: "border-sky-600/50"
+							}`}
+						>
+							{quote.trim()}
+						</blockquote>
+					</li>
+				)}
+			</ul>
+		</div>
+	);
+}
+
+function CyclingLoadingBar({ label }: { label: string }) {
+	return (
+		<div
+			className="space-y-2"
+			role="progressbar"
+			aria-busy="true"
+			aria-valuetext={label}
+		>
+			<div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-800/90 ring-1 ring-gray-700/50">
+				<div
+					className="h-full w-full origin-left animate-loading-bar-fill bg-gradient-to-r from-[#6f40ff] via-[#a855f7] to-[#da016e] will-change-transform motion-reduce:animate-none"
+					aria-hidden
+				/>
+			</div>
+		</div>
+	);
+}
+
+function SummaryTable({ rows }: { rows: ValidationResultRow[] }) {
 	const [expandedIndices, setExpandedIndices] = useState<Set<number>>(
 		new Set()
 	);
@@ -144,7 +163,7 @@ function SummaryTable({ rows }: { rows: AnalysisRow[] }) {
 					disabled={allExpanded}
 					className="rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:border-gray-500 hover:bg-gray-700/80 disabled:cursor-not-allowed disabled:opacity-50"
 				>
-					Expand all
+					Show all details
 				</button>
 				<button
 					type="button"
@@ -152,15 +171,18 @@ function SummaryTable({ rows }: { rows: AnalysisRow[] }) {
 					disabled={expandedIndices.size === 0}
 					className="rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:border-gray-500 hover:bg-gray-700/80 disabled:cursor-not-allowed disabled:opacity-50"
 				>
-					Collapse all
+					Hide all details
 				</button>
 			</div>
 			<div className="summary-table-scroll max-h-[40rem] overflow-x-auto overflow-y-auto rounded-xl border border-gray-700">
 				<table className="w-full">
 					<thead className="sticky top-0 z-10">
 						<tr className="border-b border-gray-700 bg-gray-800">
+							<th className="px-3 py-3 text-left text-sm font-semibold text-gray-300">
+								Status
+							</th>
 							<th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">
-								Analysis
+								Sample requirement
 							</th>
 							<th className="w-10 px-2 py-3" aria-label="Expand" />
 						</tr>
@@ -169,72 +191,116 @@ function SummaryTable({ rows }: { rows: AnalysisRow[] }) {
 						{rows.map((row, index) => {
 							const isExpanded = expandedIndices.has(index);
 							return (
-								<Fragment key={index}>
+								<Fragment key={row.key}>
 									<tr
 										onClick={() => toggleRow(index)}
-									className="cursor-pointer border-b border-gray-700/50 transition-colors hover:bg-gray-800/50"
-								>
-									<td className="px-4 py-3 text-sm text-white">
-										{row.analysis}
-									</td>
-									<td className="px-2 py-3">
-										<span
-											className={`inline-block transition-transform ${
-												isExpanded ? "rotate-180" : ""
-											}`}
-										>
-											▼
-										</span>
-									</td>
-								</tr>
-								{isExpanded && (
-									<tr>
-										<td
-											colSpan={2}
-											className="bg-gray-800/30 px-4 py-4"
-										>
-											<div className="grid gap-4 sm:grid-cols-2">
-												<div>
-													<p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
-														Sample
-													</p>
-													<p className="text-sm text-gray-300">
-														{row.sample}
-													</p>
-												</div>
-												<div>
-													<p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
-														Destination
-													</p>
-													<p className="text-sm text-gray-300">
-														{row.destination}
-													</p>
-												</div>
-												<div className="sm:col-span-2">
-													<p className="mb-2 text-xs font-medium uppercase tracking-wider text-gray-500">
-														Timepoints
-													</p>
-													<ul className="list-inside list-disc space-y-1 text-sm text-gray-300">
-														{row.timepoints.map(
-															(tp, i) => (
-																<li key={i}>{tp}</li>
-															)
-														)}
-													</ul>
-												</div>
-											</div>
+										className="cursor-pointer border-b border-gray-700/50 transition-colors hover:bg-gray-800/50"
+									>
+										<td className="px-3 py-3">
+											<span
+												className={`inline-block rounded-md border px-2 py-0.5 text-xs font-medium ${statusStyles(row.status)}`}
+											>
+												{statusLabel(row.status)}
+											</span>
+										</td>
+										<td className="px-4 py-3 text-sm text-white">
+											{rowTitle(row)}
+										</td>
+										<td className="px-2 py-3">
+											<span
+												className={`inline-block transition-transform ${
+													isExpanded ? "rotate-180" : ""
+												}`}
+											>
+												▼
+											</span>
 										</td>
 									</tr>
-								)}
-							</Fragment>
-						);
-					})}
-				</tbody>
+									{isExpanded && (
+										<tr>
+											<td
+												colSpan={3}
+												className="bg-gray-800/30 px-4 py-4"
+											>
+												{row.conflictFields &&
+													row.conflictFields.length > 0 && (
+														<p className="mb-3 text-sm text-amber-200/90">
+															<strong className="font-medium">
+																Review:
+															</strong>{" "}
+															{row.conflictFields.join(", ")}
+														</p>
+													)}
+												{row.analysis.trim().length > 0 && (
+													<p className="mb-3 text-sm text-gray-400">
+														<span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+															Context{" "}
+														</span>
+														{row.analysis}
+													</p>
+												)}
+												<div className="grid gap-6 lg:grid-cols-2">
+													<div className="rounded-lg border border-gray-700/80 bg-gray-900/40 p-4">
+														<p className="mb-3 text-xs font-semibold uppercase tracking-wider text-sky-300/90">
+															Trial protocol
+														</p>
+														<div className="text-sm text-gray-300">
+															<p className="mb-0.5 text-xs text-gray-500">
+																Required sample type
+															</p>
+															<p className="text-white">
+																{row.protocolSample || "—"}
+															</p>
+															<SourceCitation
+																title="Where this appears in the trial protocol"
+																variant="protocol"
+																page={row.protocolEvidencePage}
+																section={row.protocolEvidenceSection}
+																quote={row.protocolEvidenceQuote}
+															/>
+														</div>
+													</div>
+													<div className="rounded-lg border border-gray-700/80 bg-gray-900/40 p-4">
+														<p className="mb-3 text-xs font-semibold uppercase tracking-wider text-rose-300/90">
+															Laboratory manual (checklist)
+														</p>
+														<div className="text-sm text-gray-300">
+															<p className="mb-0.5 text-xs text-gray-500">
+																Required sample type
+															</p>
+															<p className="text-white">
+																{row.labSample || "—"}
+															</p>
+															<SourceCitation
+																title="Where this appears in the laboratory manual"
+																variant="lab"
+																page={row.labEvidencePage}
+																section={row.labEvidenceSection}
+																quote={row.labEvidenceQuote}
+															/>
+														</div>
+													</div>
+												</div>
+											</td>
+										</tr>
+									)}
+								</Fragment>
+							);
+						})}
+					</tbody>
 				</table>
 			</div>
 		</div>
 	);
 }
+
+type JobApiResponse = {
+	id: string;
+	status: string;
+	stageMessage?: string;
+	error?: string;
+	report?: ValidationReport;
+};
 
 export default function Index() {
 	const protocolManualRef = useRef<HTMLInputElement>(null);
@@ -243,23 +309,114 @@ export default function Index() {
 	const [protocolManual, setProtocolManual] = useState<File | null>(null);
 	const [laboratoryManual, setLaboratoryManual] = useState<File | null>(null);
 	const [showSummary, setShowSummary] = useState(false);
+	const [report, setReport] = useState<ValidationReport | null>(null);
+	const [processing, setProcessing] = useState(false);
+	const [stageMessage, setStageMessage] = useState<string | null>(null);
+	const [jobError, setJobError] = useState<string | null>(null);
 
 	const bothUploaded = protocolManual !== null && laboratoryManual !== null;
 
-	const handleProtocolManualChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleProtocolManualChange = (
+		e: React.ChangeEvent<HTMLInputElement>
+	) => {
 		const file = e.target.files?.[0];
 		setProtocolManual(file ?? null);
 	};
 
-	const handleLaboratoryManualChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleLaboratoryManualChange = (
+		e: React.ChangeEvent<HTMLInputElement>
+	) => {
 		const file = e.target.files?.[0];
 		setLaboratoryManual(file ?? null);
 	};
 
-	const handleProcess = () => {
-		if (!bothUploaded) return;
-		// TODO: Replace with actual document parsing; use mock data for now
+	const handleProcess = async () => {
+		if (!bothUploaded || !protocolManual || !laboratoryManual) return;
+		setJobError(null);
+		setReport(null);
 		setShowSummary(true);
+		setProcessing(true);
+		setStageMessage("Uploading PDFs…");
+
+		const form = new FormData();
+		form.set("protocol", protocolManual);
+		form.set("lab", laboratoryManual);
+
+		let jobId: string;
+		let pollToken: string | undefined;
+		try {
+			const res = await fetch("/api/validate", {
+				method: "POST",
+				body: form,
+				credentials: "same-origin",
+			});
+			const data = (await res.json()) as {
+				jobId?: string;
+				pollToken?: string;
+				error?: string;
+			};
+			if (!res.ok) {
+				setJobError(
+					data.error ||
+						`The upload was rejected (${res.status}). Try again or use smaller PDFs.`
+				);
+				setProcessing(false);
+				setStageMessage(null);
+				return;
+			}
+			if (!data.jobId) {
+				setJobError("The server did not return a job id. Try again.");
+				setProcessing(false);
+				setStageMessage(null);
+				return;
+			}
+			jobId = data.jobId;
+			pollToken = data.pollToken;
+		} catch {
+			setJobError("Could not reach the server. Check your connection and try again.");
+			setProcessing(false);
+			setStageMessage(null);
+			return;
+		}
+
+		const poll = async (): Promise<void> => {
+			const headers: HeadersInit = {};
+			if (pollToken)
+				headers.Authorization = `Bearer ${pollToken}`;
+			const res = await fetch(`/api/jobs/${jobId}`, {
+				credentials: "same-origin",
+				headers,
+			});
+			const data = (await res.json()) as JobApiResponse & { error?: string };
+			if (!res.ok) {
+				setJobError(
+					data.error ||
+						`Lost contact while checking status (${res.status}). Refresh and try again.`
+				);
+				setProcessing(false);
+				setStageMessage(null);
+				return;
+			}
+			if (data.stageMessage) setStageMessage(data.stageMessage);
+			if (data.status === "done" && data.report) {
+				setReport(data.report);
+				setProcessing(false);
+				setStageMessage(null);
+				return;
+			}
+			if (data.status === "error") {
+				setJobError(
+					data.error ||
+						"The comparison stopped with an error. Try again or use different PDFs."
+				);
+				setProcessing(false);
+				setStageMessage(null);
+				return;
+			}
+			setTimeout(() => void poll(), 1600);
+		};
+
+		void poll();
 	};
 
 	return (
@@ -269,33 +426,45 @@ export default function Index() {
 					<h1 className="font-outfit text-3xl font-bold text-white md:text-4xl">
 						Protocol Validator
 					</h1>
-					<p className="max-w-xl text-lg text-gray-300">
-						Validate and structure trial protocol requirements for faster
-						startup execution.
+					<p className="max-w-xl text-lg leading-relaxed text-gray-300">
+						Compare your{" "}
+						<strong className="font-semibold text-gray-200">
+							trial protocol
+						</strong>{" "}
+						and{" "}
+						<strong className="font-semibold text-gray-200">
+							laboratory manual
+						</strong>
+						: we flag where required sample types match, differ, or only appear
+						in the lab book—so you can fix gaps before startup.
 					</p>
 				</header>
 
 				<div className="flex w-full flex-col items-center gap-8">
-					{/* Protocol Validation Upload - original width */}
 					<section className="w-full max-w-2xl rounded-2xl border border-gray-700 bg-gray-900/50 p-8">
 						<h2 className="mb-6 font-outfit text-xl font-semibold text-white">
-							Protocol Validation Upload
+							Upload PDFs
 						</h2>
-						<p className="mb-6 text-gray-400">
-							Upload the Protocol Manual and Laboratory Manual to validate and
-							process your trial protocol.
+						<p className="mb-6 leading-relaxed text-gray-400">
+							Add both documents as{" "}
+							<strong className="text-gray-300">PDF</strong>. We read{" "}
+							<strong className="text-gray-300">required sample types</strong>{" "}
+							(specimens and matrices) from the lab manual and check them against
+							the protocol. We do{" "}
+							<strong className="text-gray-300">not</strong> compare visit
+							schedules or logistics. Requirements that exist only in the
+							protocol are omitted from the summary table.
 						</p>
 
 						<div className="space-y-4">
-							{/* Protocol Manual Upload */}
 							<div>
 								<label className="mb-2 block text-sm font-medium text-gray-300">
-									Protocol Manual
+									Trial protocol
 								</label>
 								<input
 									ref={protocolManualRef}
 									type="file"
-									accept=".pdf,.doc,.docx"
+									accept=".pdf,application/pdf"
 									onChange={handleProtocolManualChange}
 									className="hidden"
 								/>
@@ -306,19 +475,18 @@ export default function Index() {
 								>
 									{protocolManual
 										? protocolManual.name
-										: "Upload Protocol Manual"}
+										: "Choose trial protocol PDF"}
 								</button>
 							</div>
 
-							{/* Laboratory Manual Upload */}
 							<div>
 								<label className="mb-2 block text-sm font-medium text-gray-300">
-									Laboratory Manual
+									Laboratory manual
 								</label>
 								<input
 									ref={laboratoryManualRef}
 									type="file"
-									accept=".pdf,.doc,.docx"
+									accept=".pdf,application/pdf"
 									onChange={handleLaboratoryManualChange}
 									className="hidden"
 								/>
@@ -329,39 +497,79 @@ export default function Index() {
 								>
 									{laboratoryManual
 										? laboratoryManual.name
-										: "Upload Laboratory Manual"}
+										: "Choose laboratory manual PDF"}
 								</button>
 							</div>
 
-							{/* Process Button */}
 							<div className="pt-4">
 								<button
 									type="button"
-									onClick={handleProcess}
-									disabled={!bothUploaded}
+									onClick={() => void handleProcess()}
+									disabled={!bothUploaded || processing}
 									className={`w-full rounded-xl px-6 py-3 font-semibold text-white shadow-md transition-all ${
-										bothUploaded
+										bothUploaded && !processing
 											? "bg-gradient-to-r from-[#6f40ff] to-[#da016e] hover:opacity-90"
 											: "cursor-not-allowed bg-gray-700 text-gray-500"
 									}`}
 								>
-									Process
+									{processing ? "Running comparison…" : "Run comparison"}
 								</button>
 							</div>
 						</div>
 					</section>
 
-					{/* Summary Table - fixed width sized for expanded content */}
 					{showSummary && (
 						<section className="w-[64rem] max-w-full rounded-2xl border border-gray-700 bg-gray-900/50 p-8">
-							<h2 className="mb-6 font-outfit text-xl font-semibold text-white">
-								Summary
+							<h2 className="mb-2 font-outfit text-xl font-semibold text-white">
+								{processing && !report && !jobError
+									? "Working on your comparison"
+									: report
+										? "Results"
+										: jobError
+											? "We couldn’t finish"
+											: "Results"}
 							</h2>
-							<p className="mb-4 text-sm text-gray-400">
-								Click a row to expand and view full sample, timepoints, and
-								destination details.
-							</p>
-							<SummaryTable rows={MOCK_SUMMARY_DATA} />
+							{processing && !jobError && (
+								<div className="mb-6 space-y-3">
+									<p className="text-sm font-medium text-gray-200">
+										{stageMessage ?? "Starting…"}
+									</p>
+									<CyclingLoadingBar
+										label={stageMessage ?? "Comparison in progress"}
+									/>
+									<p className="text-xs leading-relaxed text-gray-500">
+										The bar fills and repeats—this is not an exact percent done.
+										Large or scanned PDFs can take several minutes; you can keep
+										this tab open.
+									</p>
+								</div>
+							)}
+							{jobError && (
+								<p className="mb-4 rounded-lg border border-rose-800/60 bg-rose-950/40 px-4 py-3 text-sm leading-relaxed text-rose-100">
+									{jobError}
+								</p>
+							)}
+							{report && (
+								<>
+									<p className="mb-4 text-sm leading-relaxed text-gray-400">
+										<strong className="text-gray-300">
+											{report.protocolRequirementCount}
+										</strong>{" "}
+										sample-type lines in the protocol,{" "}
+										<strong className="text-gray-300">
+											{report.labClaimCount}
+										</strong>{" "}
+										in the lab manual. Each row is one lab requirement checked
+										against the protocol—open it for citations and context.
+										Always confirm against the source PDFs.
+									</p>
+									<SummaryTable
+										rows={report.rows.filter(
+											(r) => r.status !== "protocol_only"
+										)}
+									/>
+								</>
+							)}
 						</section>
 					)}
 				</div>

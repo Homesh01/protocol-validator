@@ -91,8 +91,8 @@ export default function App() {
 						© {new Date().getFullYear()} Insynctrials. All rights reserved.
 					</p>
 					<p className="mt-4 text-xs text-gray-600">
-						Validate and structure trial protocol requirements for faster startup
-						execution.
+						Compare trial protocols and lab manuals for sample-type alignment
+						before startup.
 					</p>
 				</div>
 			</footer>

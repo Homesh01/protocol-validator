@@ -14,5 +14,11 @@
 			"binding": "AUTH_KV",
 			"id": "075f18747fe34a24bbc855dc9c16b761"
 		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "VALIDATION_R2",
+			"bucket_name": "protocol-validator-validation"
+		}
 	]
 }

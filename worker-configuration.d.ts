@@ -3,6 +3,24 @@
 
 interface Env {
 	AUTH_KV: KVNamespace;
+	/** PDF uploads and job state JSON for validation pipeline */
+	VALIDATION_R2: R2Bucket;
+	/** OpenAI API key for protocol vs lab manual extraction and comparison */
+	OPENAI_API_KEY?: string;
+	/** Model for extraction (default gpt-4o-mini) */
+	OPENAI_MODEL?: string;
+	/** Model for PDF→text via Responses API (default gpt-4o; needs vision / PDF support) */
+	OPENAI_PDF_MODEL?: string;
+	/** Max output tokens for PDF text extraction (string number; default 16384) */
+	OPENAI_PDF_MAX_OUTPUT_TOKENS?: string;
+	/** Set "false" to use synchronous Responses (may time out on large PDFs). Default: background + poll. */
+	OPENAI_PDF_RESPONSES_BACKGROUND?: string;
+	/** Max time to poll background response, ms (string number; default 1500000 ≈ 25m) */
+	OPENAI_PDF_POLL_MAX_MS?: string;
+	/** If "true", continue the pipeline when PDF extraction is shorter than the heuristic minimum (low quality). */
+	OPENAI_PDF_ALLOW_SHORT?: string;
+	/** Optional ms to wait between protocol and lab PDF extraction (same TPM bucket for gpt-4o). Max 600000. */
+	OPENAI_PDF_EXTRACT_STAGGER_MS?: string;
 	/** Fallback: comma-separated emails when KV whitelist is empty */
 	EMAIL_WHITELIST?: string;
 	/** Resend API key for sending magic link emails */

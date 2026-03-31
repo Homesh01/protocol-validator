@@ -4,6 +4,16 @@ export default {
 	content: ["./app/**/{**,.client,.server}/**/*.{js,jsx,ts,tsx}"],
 	theme: {
 		extend: {
+			keyframes: {
+				"loading-bar-fill": {
+					"0%": { transform: "scaleX(0)" },
+					"100%": { transform: "scaleX(1)" },
+				},
+			},
+			animation: {
+				"loading-bar-fill":
+					"loading-bar-fill 2.25s cubic-bezier(0.45, 0, 0.55, 1) infinite",
+			},
 			fontFamily: {
 				sans: ["Space Grotesk", "ui-sans-serif", "system-ui", "sans-serif"],
 				outfit: ["Outfit", "ui-sans-serif", "system-ui", "sans-serif"],
