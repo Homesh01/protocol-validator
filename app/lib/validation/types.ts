@@ -42,6 +42,8 @@ export type ValidationResultRow = {
 	labEvidencePage?: number;
 	labEvidenceSection?: string;
 	labEvidenceQuote?: string;
+	/** Short explanation from protocol-vs-lab adjudication (notebook-style pipeline). */
+	modelNote?: string;
 };
 
 export type ValidationReport = {

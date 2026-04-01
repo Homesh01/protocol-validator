@@ -33,7 +33,7 @@ function statusLabel(status: ValidationResultRow["status"]): string {
 		case "aligned":
 			return "Aligned";
 		case "conflict":
-			return "Conflict";
+			return "Needs review";
 		case "protocol_only":
 			return "Only in protocol (legacy)";
 		case "lab_only":
@@ -234,9 +234,17 @@ function SummaryTable({ rows }: { rows: ValidationResultRow[] }) {
 												{row.analysis.trim().length > 0 && (
 													<p className="mb-3 text-sm text-gray-400">
 														<span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-															Context{" "}
+															Sample / assay{" "}
 														</span>
 														{row.analysis}
+													</p>
+												)}
+												{row.modelNote?.trim() && (
+													<p className="mb-3 text-sm text-gray-400">
+														<span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+															Model note{" "}
+														</span>
+														{row.modelNote}
 													</p>
 												)}
 												<div className="grid gap-6 lg:grid-cols-2">
@@ -537,11 +545,6 @@ export default function Index() {
 									<CyclingLoadingBar
 										label={stageMessage ?? "Comparison in progress"}
 									/>
-									<p className="text-xs leading-relaxed text-gray-500">
-										The bar fills and repeats—this is not an exact percent done.
-										Large or scanned PDFs can take several minutes; you can keep
-										this tab open.
-									</p>
 								</div>
 							)}
 							{jobError && (
@@ -553,15 +556,16 @@ export default function Index() {
 								<>
 									<p className="mb-4 text-sm leading-relaxed text-gray-400">
 										<strong className="text-gray-300">
-											{report.protocolRequirementCount}
-										</strong>{" "}
-										sample-type lines in the protocol,{" "}
-										<strong className="text-gray-300">
 											{report.labClaimCount}
 										</strong>{" "}
-										in the lab manual. Each row is one lab requirement checked
-										against the protocol—open it for citations and context.
-										Always confirm against the source PDFs.
+										sample row(s) from the lab manual.{" "}
+										<strong className="text-gray-300">
+											{report.protocolRequirementCount}
+										</strong>{" "}
+										have matching or possible protocol support (the rest are not
+										found in the protocol excerpts we considered). Each row: fuzzy
+										protocol pages, then a model check—open for quotes and notes.
+										Confirm in the PDFs.
 									</p>
 									<SummaryTable
 										rows={report.rows.filter(

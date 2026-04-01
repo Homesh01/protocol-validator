@@ -1,0 +1,11 @@
+openai
+jupyter
+ipykernel
+pymupdf
+pydantic
+pandas
+python-dotenv
+rapidfuzz
+openpyxl
+
+poker18

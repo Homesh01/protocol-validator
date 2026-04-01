@@ -19,7 +19,10 @@ interface Env {
 	OPENAI_PDF_POLL_MAX_MS?: string;
 	/** If "true", continue the pipeline when PDF extraction is shorter than the heuristic minimum (low quality). */
 	OPENAI_PDF_ALLOW_SHORT?: string;
-	/** Optional ms to wait between protocol and lab PDF extraction (same TPM bucket for gpt-4o). Max 600000. */
+	/**
+	 * Ms to wait between protocol and lab PDF extraction (gpt-4o TPM). Max 600000.
+	 * Omit for default 55000. Set "0" to disable (faster but more 429 risk on low TPM).
+	 */
 	OPENAI_PDF_EXTRACT_STAGGER_MS?: string;
 	/** Fallback: comma-separated emails when KV whitelist is empty */
 	EMAIL_WHITELIST?: string;

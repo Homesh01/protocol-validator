@@ -10,21 +10,24 @@ export function sleep(ms: number): Promise<void> {
  * else parses OpenAI error text ("try again in 48.066s").
  */
 export function parseOpenAiRateLimitWaitMs(res: Response, body: string): number {
+	let ms = 50_000;
 	const ra = res.headers.get("retry-after");
 	if (ra) {
 		const n = Number.parseFloat(ra.trim());
 		if (Number.isFinite(n) && n >= 0) {
-			return Math.min(180_000, Math.max(1_000, Math.ceil(n * 1000)));
+			ms = Math.min(180_000, Math.max(1_000, Math.ceil(n * 1000)));
+		}
+	} else {
+		const m = body.match(/try again in\s+([\d.]+)\s*s/i);
+		if (m) {
+			const sec = Number.parseFloat(m[1]!);
+			if (Number.isFinite(sec) && sec >= 0) {
+				ms = Math.min(180_000, Math.max(1_000, Math.ceil(sec * 1000)));
+			}
 		}
 	}
-	const m = body.match(/try again in\s+([\d.]+)\s*s/i);
-	if (m) {
-		const sec = Number.parseFloat(m[1]!);
-		if (Number.isFinite(sec) && sec >= 0) {
-			return Math.min(180_000, Math.max(1_000, Math.ceil(sec * 1000)));
-		}
-	}
-	return Math.min(90_000, 10_000);
+	// Extra buffer so rolling TPM (e.g. 30k/min) has actually reset
+	return Math.min(200_000, ms + 8_000);
 }
 
 /**
@@ -37,7 +40,7 @@ export async function openaiFetchResilient(
 	op: string,
 	opts: { maxAttempts?: number } = {}
 ): Promise<Response> {
-	const maxAttempts = Math.max(1, opts.maxAttempts ?? 10);
+	const maxAttempts = Math.max(1, opts.maxAttempts ?? 14);
 	let lastErr: unknown;
 
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {

@@ -1,35 +1,25 @@
 import { sleep } from "./openai-http";
-import { compareProtocolToLab } from "./compare";
-import {
-	chunkText,
-	extractPdfPages,
-	filterProtocolPages,
-	limitChunks,
-	pagesToMarkedText,
-} from "./extract-pdf";
+import { extractPdfPages } from "./extract-pdf";
 import { createJobLogger, serializeError, type JobLogger } from "./log";
-import { backfillMergedProtocolEvidence } from "./evidence-backfill";
 import {
-	extractLabClaims,
-	extractProtocolChunk,
-	reduceProtocolRequirements,
-} from "./openai-client";
+	adjudicateLabSampleVsProtocol,
+	extractLabSamplesFromManual,
+	type LabSampleRow,
+	type ProtocolMatchAdjudication,
+} from "./notebook-llm";
+import {
+	buildProtocolIndex,
+	extractProtocolFragment,
+	findProtocolCandidates,
+	labManualToPageMarkedText,
+} from "./notebook-match";
 import {
 	getJobState,
 	labObjectKey,
 	protocolObjectKey,
 	putJobState,
 } from "./job-storage";
-import type {
-	ExtractedRow,
-	JobState,
-	LabClaim,
-	ProtocolRequirement,
-} from "./types";
-
-const PROTOCOL_CHUNK_SIZE = 6500;
-const PROTOCOL_CHUNK_OVERLAP = 450;
-const MAX_PROTOCOL_CHUNKS = 22;
+import type { JobState, ValidationReport, ValidationResultRow } from "./types";
 
 async function patchJob(
 	env: Env,
@@ -60,48 +50,73 @@ async function patchJob(
 	await putJobState(env.VALIDATION_R2, next);
 }
 
-const REDUCE_BATCH = 50;
-const REDUCE_ROUNDS = 12;
-
-/** Pause between the two PDF→text runs (same gpt-4o TPM pool); 0 = off. */
+/**
+ * Pause between the two PDF→text runs (same gpt-4o TPM pool).
+ * Default 55s when unset so both ~25k-token extracts rarely land in one minute.
+ * Set OPENAI_PDF_EXTRACT_STAGGER_MS=0 to disable.
+ */
 function parsePdfExtractStaggerMs(env: Env): number {
 	const raw = env.OPENAI_PDF_EXTRACT_STAGGER_MS?.trim();
-	if (!raw) return 0;
+	if (raw === undefined || raw === "") return 55_000;
 	const n = Number.parseInt(raw, 10);
-	if (!Number.isFinite(n) || n <= 0) return 0;
+	if (!Number.isFinite(n) || n < 0) return 55_000;
+	if (n === 0) return 0;
 	return Math.min(n, 600_000);
 }
 
-async function reduceInBatches(
-	env: Env,
-	rows: ExtractedRow[],
-	log: JobLogger
-): Promise<ExtractedRow[]> {
-	if (rows.length === 0) return [];
-	let reduceCallSeq = 0;
-	let current = [...rows];
-	for (let round = 0; round < REDUCE_ROUNDS && current.length > REDUCE_BATCH; round++) {
-		const next: ExtractedRow[] = [];
-		for (let i = 0; i < current.length; i += REDUCE_BATCH) {
-			const batch = current.slice(i, i + REDUCE_BATCH);
-			const merged = await reduceProtocolRequirements(
-				env,
-				batch,
-				log,
-				reduceCallSeq++
-			);
-			next.push(...merged);
-		}
-		if (next.length === 0) return [];
-		if (next.length >= current.length) {
-			current = next;
-			break;
-		}
-		current = next;
-	}
-	return reduceProtocolRequirements(env, current, log, reduceCallSeq++);
+function labSampleDisplay(lab: LabSampleRow): string {
+	const parts = [lab.sample_type, lab.source_material, lab.collection_details]
+		.map((x) => (typeof x === "string" ? x.trim() : ""))
+		.filter(Boolean);
+	return parts.length > 0 ? parts.join(" · ") : lab.source_text;
 }
 
+function notebookRowToValidationRow(
+	key: string,
+	lab: LabSampleRow,
+	match: ProtocolMatchAdjudication,
+	protocolFragment: string | undefined
+): ValidationResultRow {
+	let status: ValidationResultRow["status"];
+	if (match.status === "not_found") status = "lab_only";
+	else if (match.status === "ambiguous") status = "conflict";
+	else status = "aligned";
+
+	const protocolSample =
+		match.status === "not_found"
+			? ""
+			: (protocolFragment?.trim() ||
+					match.evidence?.trim() ||
+					"—");
+
+	return {
+		key,
+		status,
+		analysis: lab.sample_name,
+		modelNote: match.rationale?.trim() || undefined,
+		protocolSample,
+		labSample: labSampleDisplay(lab),
+		protocolTimepoints: [],
+		labTimepoints: [],
+		protocolDestination: "",
+		labDestination: "",
+		conflictFields:
+			match.status === "ambiguous" ? ["unclear protocol match"] : undefined,
+		protocolEvidencePage:
+			match.protocol_page != null ? match.protocol_page : undefined,
+		protocolEvidenceSection:
+			match.protocol_section?.trim() || undefined,
+		protocolEvidenceQuote: protocolFragment?.trim() || match.evidence?.trim(),
+		labEvidencePage: lab.manual_page,
+		labEvidenceSection: lab.manual_section?.trim() || undefined,
+		labEvidenceQuote: lab.source_text,
+	};
+}
+
+/**
+ * Notebook-style pipeline: PDF→text (OpenAI), lab manual structured extract,
+ * fuzzball top-k protocol pages per sample, LLM adjudication per sample.
+ */
 export async function runValidationPipeline(jobId: string, env: Env): Promise<void> {
 	const log = createJobLogger(jobId);
 	const pipelineT0 = Date.now();
@@ -139,7 +154,7 @@ export async function runValidationPipeline(jobId: string, env: Env): Promise<vo
 		if (staggerMs > 0) {
 			const sec = Math.round(staggerMs / 1000);
 			await patchJob(env, jobId, log, {
-				stageMessage: `Pausing ${sec}s before laboratory manual (spreads gpt-4o usage for rate limits)…`,
+				stageMessage: `Pausing ${sec}s before laboratory manual (avoids gpt-4o tokens-per-minute limits)…`,
 			});
 			await sleep(staggerMs);
 		}
@@ -155,84 +170,91 @@ export async function runValidationPipeline(jobId: string, env: Env): Promise<vo
 			labFileName
 		);
 
-		const protocolPages = filterProtocolPages(protocolPdf.pages);
-		const protocolMarked = pagesToMarkedText(protocolPages);
-		let chunks = chunkText(
-			protocolMarked,
-			PROTOCOL_CHUNK_SIZE,
-			PROTOCOL_CHUNK_OVERLAP
-		);
-		chunks = limitChunks(chunks, MAX_PROTOCOL_CHUNKS);
+		const protocolPages = protocolPdf.pages;
+		const protocolIndex = buildProtocolIndex(protocolPages);
+		const pageMap = new Map(protocolPages.map((p) => [p.page, p.text]));
 
-		log.info("protocol_text_prepared", {
+		log.info("notebook_pdf_ready", {
 			protocolTotalPages: protocolPdf.totalPages,
-			protocolPagesAfterFilter: protocolPages.length,
-			chunkCount: chunks.length,
-			protocolMarkedChars: protocolMarked.length,
+			protocolIndexPages: protocolIndex.length,
 			labTotalPages: labPdf.totalPages,
 		});
 
-		await patchJob(env, jobId, log, {
-			status: "protocol_llm",
-			stageMessage: `Extracting required sample types from protocol (${chunks.length} sections)…`,
-		});
+		const labMarked = labManualToPageMarkedText(labPdf.pages);
 
-		const chunkRows: ExtractedRow[] = [];
-		for (let i = 0; i < chunks.length; i++) {
-			const rows = await extractProtocolChunk(
-				env,
-				chunks[i],
-				i,
-				chunks.length,
-				log
-			);
-			chunkRows.push(...rows);
-			await patchJob(env, jobId, log, {
-				stageMessage: `Protocol extraction ${i + 1}/${chunks.length}…`,
-			});
-		}
-
-		log.info("protocol_chunks_extracted", {
-			rawRowCount: chunkRows.length,
-		});
-
-		await patchJob(env, jobId, log, {
-			stageMessage: "Merging protocol sample-type rows…",
-		});
-		const mergedRows = await reduceInBatches(env, chunkRows, log);
-		const mergedWithEvidence = backfillMergedProtocolEvidence(
-			mergedRows,
-			chunkRows
-		);
-		const requirements: ProtocolRequirement[] = mergedWithEvidence.map(
-			(r) => ({
-				...r,
-				id: crypto.randomUUID(),
-			})
-		);
-
-		log.info("protocol_requirements_final", {
-			count: requirements.length,
-		});
-
-		const labMarked = pagesToMarkedText(labPdf.pages);
 		await patchJob(env, jobId, log, {
 			status: "lab_llm",
-			stageMessage: "Extracting sample types from laboratory manual…",
+			stageMessage: "Extracting samples from laboratory manual…",
 		});
-		const labExtracted = await extractLabClaims(env, labMarked, log);
-		const claims: LabClaim[] = labExtracted.map((c) => ({
-			...c,
-			id: crypto.randomUUID(),
-		}));
+		const samples = await extractLabSamplesFromManual(env, labMarked, log);
+		log.info("notebook_lab_samples", { count: samples.length });
 
-		log.info("lab_claims_final", { count: claims.length });
+		if (samples.length === 0) {
+			const report: ValidationReport = {
+				protocolRequirementCount: 0,
+				labClaimCount: 0,
+				rows: [],
+			};
+			await patchJob(env, jobId, log, {
+				status: "done",
+				stageMessage: "Complete",
+				report,
+			});
+			log.info("pipeline_complete", {
+				totalDurationMs: Date.now() - pipelineT0,
+				note: "no_lab_samples",
+			});
+			return;
+		}
 
 		await patchJob(env, jobId, log, {
 			status: "comparing",
-			stageMessage: "Checking lab manual sample types against trial protocol…",
+			stageMessage: "Matching each lab sample to protocol pages…",
 		});
-		const report = compareProtocolToLab(requirements, claims, log);
+
+		const rows: ValidationResultRow[] = [];
+		const topK = 5;
+
+		for (let i = 0; i < samples.length; i++) {
+			const lab = samples[i]!;
+			await patchJob(env, jobId, log, {
+				stageMessage: `Protocol check ${i + 1}/${samples.length}: ${lab.sample_name.slice(0, 48)}…`,
+			});
+
+			const candidates = findProtocolCandidates(
+				lab.sample_name,
+				lab.source_text,
+				protocolIndex,
+				topK
+			);
+			const match = await adjudicateLabSampleVsProtocol(
+				env,
+				lab,
+				candidates,
+				log,
+				i,
+				samples.length
+			);
+
+			const fragment = extractProtocolFragment(
+				pageMap,
+				lab.sample_name,
+				match.protocol_page,
+				match.protocol_section,
+				match.evidence
+			);
+
+			rows.push(
+				notebookRowToValidationRow(`n-${i}`, lab, match, fragment)
+			);
+		}
+
+		const withProtocolRef = rows.filter((r) => r.status !== "lab_only").length;
+		const report: ValidationReport = {
+			protocolRequirementCount: withProtocolRef,
+			labClaimCount: samples.length,
+			rows,
+		};
 
 		await patchJob(env, jobId, log, {
 			status: "done",
@@ -242,6 +264,8 @@ export async function runValidationPipeline(jobId: string, env: Env): Promise<vo
 
 		log.info("pipeline_complete", {
 			totalDurationMs: Date.now() - pipelineT0,
+			labSamples: samples.length,
+			withProtocolRef,
 		});
 	} catch (e) {
 		const err = serializeError(e);

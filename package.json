@@ -12,13 +12,14 @@
 		"publish": true
 	},
 	"dependencies": {
-		"resend": "^4.0.0",
 		"@remix-run/cloudflare": "2.17.2",
 		"@remix-run/react": "2.17.2",
 		"@remix-run/server-runtime": "2.17.2",
+		"fuzzball": "^2.2.3",
 		"isbot": "5.1.32",
 		"react": "^18.0.0",
-		"react-dom": "^18.0.0"
+		"react-dom": "^18.0.0",
+		"resend": "^4.0.0"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250425.0",

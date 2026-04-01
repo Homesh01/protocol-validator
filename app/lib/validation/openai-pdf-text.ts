@@ -14,6 +14,8 @@ type ResponsesPayload = Record<string, unknown> & {
 const LARGE_PDF_BYTES = 350_000;
 /** Below this for a large PDF, extraction is almost certainly broken. */
 const HARD_FAIL_MAX_CHARS = 120;
+/** gpt-4o PDF Responses hits TPM often; allow many 429 waits before failing. */
+const PDF_FETCH_MAX_ATTEMPTS = 20;
 
 function effectiveMaxOutputTokens(configMax: number, bytes: number): number {
 	let m = Math.max(4_096, configMax);
@@ -101,7 +103,7 @@ async function uploadPdfToOpenAI(
 		},
 		log,
 		`${label}_files_upload`,
-		{ maxAttempts: 8 }
+		{ maxAttempts: 14 }
 	);
 	const durationMs = Date.now() - t0;
 
@@ -173,7 +175,7 @@ async function retrieveResponse(
 		},
 		log,
 		`${label}_responses_get`,
-		{ maxAttempts: 10 }
+		{ maxAttempts: PDF_FETCH_MAX_ATTEMPTS }
 	);
 	if (!res.ok) {
 		const t = await res.text();
@@ -453,7 +455,7 @@ Strict rules:
 			},
 			log,
 			`${label}_responses_create`,
-			{ maxAttempts: 10 }
+			{ maxAttempts: PDF_FETCH_MAX_ATTEMPTS }
 		);
 
 		if (!res.ok && preferBackground) {
@@ -484,7 +486,7 @@ Strict rules:
 					},
 					log,
 					`${label}_responses_create_sync`,
-					{ maxAttempts: 10 }
+					{ maxAttempts: PDF_FETCH_MAX_ATTEMPTS }
 				);
 			} else {
 				log.error("openai_pdf_extract_http_error", {
@@ -536,7 +538,7 @@ Strict rules:
 				},
 				log,
 				`${label}_responses_vision_transcribe`,
-				{ maxAttempts: 10 }
+				{ maxAttempts: PDF_FETCH_MAX_ATTEMPTS }
 			);
 			if (!resV.ok) return;
 			let dV = (await resV.json()) as ResponsesPayload;
@@ -575,7 +577,7 @@ Strict rules:
 				},
 				log,
 				`${label}_responses_retry_128k`,
-				{ maxAttempts: 10 }
+				{ maxAttempts: PDF_FETCH_MAX_ATTEMPTS }
 			);
 			if (resBump.ok) {
 				let dBump = (await resBump.json()) as ResponsesPayload;
@@ -624,7 +626,7 @@ Strict rules:
 					},
 					log,
 					`${label}_responses_bg_retry_short`,
-					{ maxAttempts: 10 }
+					{ maxAttempts: PDF_FETCH_MAX_ATTEMPTS }
 				);
 				if (resSync.ok) {
 					let d2 = (await resSync.json()) as ResponsesPayload;
@@ -656,7 +658,7 @@ Strict rules:
 					},
 					log,
 					`${label}_responses_128k_aggressive`,
-					{ maxAttempts: 10 }
+					{ maxAttempts: PDF_FETCH_MAX_ATTEMPTS }
 				);
 				if (resHi.ok) {
 					let d3 = (await resHi.json()) as ResponsesPayload;
