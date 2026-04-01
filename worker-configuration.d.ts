@@ -5,6 +5,12 @@ interface Env {
 	AUTH_KV: KVNamespace;
 	/** PDF uploads and job state JSON for validation pipeline */
 	VALIDATION_R2: R2Bucket;
+	/**
+	 * Runs validation out-of-band: `waitUntil` only lasts ~30s after POST /api/validate returns,
+	 * so production uses this queue (consumer has long wall time). Omit binding only for local
+	 * fallbacks that use `ctx.waitUntil` instead.
+	 */
+	VALIDATION_QUEUE?: Queue<{ jobId: string }>;
 	/** OpenAI API key for protocol vs lab manual extraction and comparison */
 	OPENAI_API_KEY?: string;
 	/** Model for extraction (default gpt-4o-mini) */
@@ -24,6 +30,19 @@ interface Env {
 	 * Omit for default 55000. Set "0" to disable (faster but more 429 risk on low TPM).
 	 */
 	OPENAI_PDF_EXTRACT_STAGGER_MS?: string;
+	/**
+	 * PDF TPM safety: small first Responses request + pause before follow-ups (default on).
+	 * Set "false" if your gpt-4o TPM limit is high and you want fewer delays.
+	 */
+	OPENAI_PDF_LOW_TPM?: string;
+	/** With LOW_TPM: max_output_tokens for the first PDF extract only (default 8192). */
+	OPENAI_PDF_LOW_TPM_FIRST_MAX?: string;
+	/** With LOW_TPM: ms to wait before 2nd+ PDF Responses calls (default 70000). */
+	OPENAI_PDF_LOW_TPM_GAP_MS?: string;
+	/** Optional cap on first PDF pass max_output_tokens only (no pauses). Use with tight TPM. */
+	OPENAI_PDF_INITIAL_MAX_OUTPUT?: string;
+	/** Optional cap on every PDF Responses max_output_tokens (applies to all passes). */
+	OPENAI_PDF_MAX_OUTPUT_REQUEST_CAP?: string;
 	/** Fallback: comma-separated emails when KV whitelist is empty */
 	EMAIL_WHITELIST?: string;
 	/** Resend API key for sending magic link emails */

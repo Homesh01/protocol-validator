@@ -12,11 +12,41 @@ import {
 import { handleAdminWhitelist } from "./app/lib/admin-whitelist";
 import { clearSessionCookie } from "./app/lib/auth";
 import { handleValidationApi } from "./app/lib/validation-http";
+import { runValidationPipeline } from "./app/lib/validation/pipeline";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const handleRemixRequest = createRequestHandler(build as any as ServerBuild);
 
 export default {
+	async queue(batch: MessageBatch, env: Env, _ctx: ExecutionContext): Promise<void> {
+		for (const message of batch.messages) {
+			const body = message.body as { jobId?: unknown };
+			const jobId = typeof body?.jobId === "string" ? body.jobId : "";
+			if (!jobId) {
+				message.ack();
+				continue;
+			}
+			try {
+				await runValidationPipeline(jobId, env);
+				message.ack();
+			} catch (error) {
+				console.error(
+					JSON.stringify({
+						ts: new Date().toISOString(),
+						level: "error",
+						msg: "validation_queue_message_failed",
+						service: "protocol-validator",
+						jobId,
+						err:
+							error instanceof Error
+								? { name: error.name, message: error.message.slice(0, 500) }
+								: { message: String(error).slice(0, 500) },
+					})
+				);
+				message.retry();
+			}
+		}
+	},
 	async fetch(request, env, ctx) {
 		try {
 			const url = new URL(request.url);

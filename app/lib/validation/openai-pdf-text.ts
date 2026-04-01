@@ -1,6 +1,6 @@
 import type { JobLogger } from "./log";
 import { truncateForLog } from "./log";
-import { openaiFetchResilient } from "./openai-http";
+import { openaiFetchResilient, sleep } from "./openai-http";
 import type { PdfPageText } from "./types";
 
 type ResponsesPayload = Record<string, unknown> & {
@@ -45,6 +45,44 @@ function allowShortPdfOutput(env: Env): boolean {
 			.trim()
 			.toLowerCase() === "true"
 	);
+}
+
+function parseOptionalPositiveInt(
+	raw: string | undefined,
+	max = 128_000
+): number | undefined {
+	const t = raw?.trim();
+	if (!t) return undefined;
+	const n = Number.parseInt(t, 10);
+	if (!Number.isFinite(n) || n < 1024) return undefined;
+	return Math.min(n, max);
+}
+
+/**
+ * Spread gpt-4o TPM: small first PDF request + pauses before follow-ups.
+ * Default on (common ~30k TPM tiers). Set OPENAI_PDF_LOW_TPM=false if your org has high limits.
+ */
+function pdfLowTpmEnabled(env: Env): boolean {
+	const raw = env.OPENAI_PDF_LOW_TPM?.trim().toLowerCase();
+	if (raw === "false" || raw === "0" || raw === "off") return false;
+	if (raw === "true" || raw === "1" || raw === "on") return true;
+	return true;
+}
+
+function pdfLowTpmFirstMaxOut(env: Env): number {
+	const n = parseOptionalPositiveInt(env.OPENAI_PDF_LOW_TPM_FIRST_MAX, 64_000);
+	return n ?? 8_192;
+}
+
+function pdfLowTpmGapMs(env: Env): number {
+	const raw = env.OPENAI_PDF_LOW_TPM_GAP_MS?.trim();
+	const n = raw ? Number.parseInt(raw, 10) : NaN;
+	if (Number.isFinite(n) && n >= 0) return Math.min(n, 600_000);
+	return 70_000;
+}
+
+function pdfMaxOutputRequestCap(env: Env): number | undefined {
+	return parseOptionalPositiveInt(env.OPENAI_PDF_MAX_OUTPUT_REQUEST_CAP, 128_000);
 }
 
 /**
@@ -351,6 +389,9 @@ function parsePollMaxMs(env: Env): number {
  * Uses **background** Responses + **polling** so one connection is not held open for many minutes
  * (avoids "Network connection lost" on long PDFs). PDFs ≥ LARGE_PDF_BYTES always use background+store
  * even if OPENAI_PDF_RESPONSES_BACKGROUND=false, so retries do not block on a single long POST.
+ *
+ * TPM: by default OPENAI_PDF_LOW_TPM behavior is on—first pass uses a small max_output budget,
+ * then ~70s pause before any follow-up Responses call. Set OPENAI_PDF_LOW_TPM=false to disable.
  */
 export async function extractPdfTextWithOpenAI(
 	env: Env,
@@ -374,6 +415,22 @@ export async function extractPdfTextWithOpenAI(
 		configuredMax,
 		buffer.byteLength
 	);
+
+	const requestCap = pdfMaxOutputRequestCap(env);
+	const clipTok = (n: number) =>
+		requestCap != null ? Math.min(n, requestCap) : n;
+
+	let firstPassMax = effectiveMax;
+	if (pdfLowTpmEnabled(env)) {
+		firstPassMax = Math.min(firstPassMax, pdfLowTpmFirstMaxOut(env));
+	}
+	const initOnlyCap = parseOptionalPositiveInt(env.OPENAI_PDF_INITIAL_MAX_OUTPUT);
+	if (initOnlyCap != null) {
+		firstPassMax = Math.min(firstPassMax, initOnlyCap);
+	}
+
+	const lowTpm = pdfLowTpmEnabled(env);
+	const followUpMax = lowTpm ? Math.min(128_000, effectiveMax) : 128_000;
 
 	const useBackground =
 		String(env.OPENAI_PDF_RESPONSES_BACKGROUND ?? "true")
@@ -412,9 +469,16 @@ Strict rules:
 	try {
 		fileId = await uploadPdfToOpenAI(env, buffer, filename, log, label);
 
+		const lowTpmPause = async (reason: string) => {
+			if (!lowTpm) return;
+			const ms = pdfLowTpmGapMs(env);
+			log.info("openai_pdf_low_tpm_pause", { label, reason, ms });
+			await sleep(ms);
+		};
+
 		const buildPayload = (maxTok: number, instruct: string) => ({
 			model,
-			max_output_tokens: maxTok,
+			max_output_tokens: clipTok(maxTok),
 			input: [
 				{
 					role: "user",
@@ -426,7 +490,7 @@ Strict rules:
 			],
 		});
 
-		const inputPayload = buildPayload(effectiveMax, instruction);
+		const inputPayload = buildPayload(firstPassMax, instruction);
 
 		const wrapBg = (p: ReturnType<typeof buildPayload>) =>
 			preferBackground
@@ -438,6 +502,10 @@ Strict rules:
 			model,
 			configuredMax,
 			effectiveMax,
+			firstPassMax,
+			followUpMax,
+			lowTpm,
+			maxOutputRequestCap: requestCap,
 			bytes: buffer.byteLength,
 			background: preferBackground,
 			backgroundEnv: useBackground,
@@ -474,6 +542,7 @@ Strict rules:
 					label,
 					preview: truncateForLog(errText, 240),
 				});
+				await lowTpmPause("sync_fallback");
 				res = await openaiFetchResilient(
 					"https://api.openai.com/v1/responses",
 					{
@@ -525,7 +594,11 @@ Strict rules:
 				refusal: looksLikeModelRefusal(rawText),
 				outputChars: rawText.length,
 			});
-			const visionPayload = buildPayload(128_000, visionTranscribeInstruction);
+			await lowTpmPause("vision_transcribe");
+			const visionPayload = buildPayload(
+				followUpMax,
+				visionTranscribeInstruction
+			);
 			const resV = await openaiFetchResilient(
 				"https://api.openai.com/v1/responses",
 				{
@@ -564,7 +637,8 @@ Strict rules:
 				label,
 				outputChars: rawText.length,
 			});
-			const bumpPayload = buildPayload(128_000, instruction);
+			await lowTpmPause("retry_after_truncation");
+			const bumpPayload = buildPayload(followUpMax, instruction);
 			const resBump = await openaiFetchResilient(
 				"https://api.openai.com/v1/responses",
 				{
@@ -614,6 +688,8 @@ Strict rules:
 			});
 
 			if (preferBackground) {
+				await lowTpmPause("bg_retry_short");
+				const shortRetryPayload = buildPayload(followUpMax, instruction);
 				const resSync = await openaiFetchResilient(
 					"https://api.openai.com/v1/responses",
 					{
@@ -622,7 +698,7 @@ Strict rules:
 							Authorization: `Bearer ${env.OPENAI_API_KEY}`,
 							"Content-Type": "application/json",
 						},
-						body: JSON.stringify(wrapBg(inputPayload)),
+						body: JSON.stringify(wrapBg(shortRetryPayload)),
 					},
 					log,
 					`${label}_responses_bg_retry_short`,
@@ -645,7 +721,8 @@ Strict rules:
 			}
 
 			if (rawText.length < minExpected) {
-				const hiPayload = buildPayload(128_000, aggressiveInstruction);
+				await lowTpmPause("aggressive_retry");
+				const hiPayload = buildPayload(followUpMax, aggressiveInstruction);
 				const resHi = await openaiFetchResilient(
 					"https://api.openai.com/v1/responses",
 					{

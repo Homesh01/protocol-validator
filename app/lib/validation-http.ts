@@ -155,7 +155,13 @@ export async function handleValidationApi(
 			labFileName: lab.name.slice(0, 120),
 		});
 
-		ctx.waitUntil(runValidationPipeline(jobId, env));
+		// Production: Cloudflare cancels ctx.waitUntil ~30s after the 202 is sent—too short for
+		// PDF + OpenAI. Prefer a Queue consumer (see server.ts queue handler).
+		if (env.VALIDATION_QUEUE) {
+			await env.VALIDATION_QUEUE.send({ jobId });
+		} else {
+			ctx.waitUntil(runValidationPipeline(jobId, env));
+		}
 
 		return json({ jobId, status: "queued", pollToken }, 202);
 	}

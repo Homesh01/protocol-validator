@@ -20,5 +20,21 @@
 			"binding": "VALIDATION_R2",
 			"bucket_name": "protocol-validator-validation"
 		}
-	]
+	],
+	"queues": {
+		"producers": [
+			{
+				"binding": "VALIDATION_QUEUE",
+				"queue": "protocol-validator-pipeline"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "protocol-validator-pipeline",
+				"max_batch_size": 1,
+				"max_batch_timeout": 0,
+				"max_retries": 3
+			}
+		]
+	}
 }
