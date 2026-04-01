@@ -54,6 +54,8 @@ export function findProtocolCandidates(
 	return scored.slice(0, topK).map((s) => s.page);
 }
 
+/** Same role as the notebook `extract_protocol_fragment` (120/220 windows, terms: name, section, evidence).
+ * Adds a long-token anchor pass; omits the notebook `text[:350]` fallback when evidence is absent. */
 export function extractProtocolFragment(
 	pageMap: Map<number, string>,
 	sampleName: string,
@@ -87,5 +89,23 @@ export function extractProtocolFragment(
 			return textClean.slice(start, end);
 		}
 	}
-	return fallbackEvidence?.trim() || textClean.slice(0, 350);
+	// Avoid slice(0, N): page text often starts with template / cover noise.
+	const longWords: string[] = [];
+	for (const src of [sampleName, fallbackEvidence ?? ""]) {
+		for (const w of src.split(/\s+/)) {
+			const c = w.replace(/[^A-Za-z0-9-]/g, "");
+			if (c.length >= 12) longWords.push(w);
+		}
+	}
+	longWords.sort((a, b) => b.length - a.length);
+	for (const w of longWords.slice(0, 10)) {
+		const idx = findIdx(textClean, w);
+		if (idx >= 0) {
+			const span = w.length;
+			const start = Math.max(0, idx - windowBefore);
+			const end = Math.min(textClean.length, idx + span + windowAfter);
+			return textClean.slice(start, end);
+		}
+	}
+	return fallbackEvidence?.trim() || undefined;
 }

@@ -71,6 +71,18 @@ function labSampleDisplay(lab: LabSampleRow): string {
 	return parts.length > 0 ? parts.join(" · ") : lab.source_text;
 }
 
+/** UI / report line length; prefer model evidence (short quote), not raw page windows. */
+function clipProtocolDisplay(s: string | undefined, max: number): string | undefined {
+	const t = s?.replace(/\s+/g, " ").trim();
+	if (!t) return undefined;
+	if (t.length <= max) return t;
+	const cut = t.slice(0, max);
+	const lastSpace = cut.lastIndexOf(" ");
+	const head =
+		lastSpace > max * 0.55 ? cut.slice(0, lastSpace).trimEnd() : cut.trimEnd();
+	return `${head}…`;
+}
+
 function notebookRowToValidationRow(
 	key: string,
 	lab: LabSampleRow,
@@ -82,12 +94,34 @@ function notebookRowToValidationRow(
 	else if (match.status === "ambiguous") status = "conflict";
 	else status = "aligned";
 
+	const evidence = match.evidence?.replace(/\s+/g, " ").trim();
+	const frag = protocolFragment?.replace(/\s+/g, " ").trim();
+
+	// Match Jupyter-style rows: short protocol fragment from adjudication first;
+	// mechanical page windows often start with template text when anchoring fails.
 	const protocolSample =
 		match.status === "not_found"
 			? ""
-			: (protocolFragment?.trim() ||
-					match.evidence?.trim() ||
-					"—");
+			: clipProtocolDisplay(evidence, 360) ||
+				clipProtocolDisplay(frag, 360) ||
+				"—";
+
+	let protocolEvidenceQuote: string | undefined;
+	if (frag && evidence) {
+		const needle = evidence.slice(0, Math.min(56, evidence.length)).trim();
+		if (
+			needle.length >= 10 &&
+			frag.toLowerCase().includes(needle.toLowerCase())
+		) {
+			protocolEvidenceQuote = clipProtocolDisplay(frag, 1400);
+		} else {
+			protocolEvidenceQuote =
+				clipProtocolDisplay(evidence, 1400) || clipProtocolDisplay(frag, 1400);
+		}
+	} else {
+		protocolEvidenceQuote =
+			clipProtocolDisplay(evidence, 1400) || clipProtocolDisplay(frag, 1400);
+	}
 
 	return {
 		key,
@@ -106,7 +140,7 @@ function notebookRowToValidationRow(
 			match.protocol_page != null ? match.protocol_page : undefined,
 		protocolEvidenceSection:
 			match.protocol_section?.trim() || undefined,
-		protocolEvidenceQuote: protocolFragment?.trim() || match.evidence?.trim(),
+		protocolEvidenceQuote,
 		labEvidencePage: lab.manual_page,
 		labEvidenceSection: lab.manual_section?.trim() || undefined,
 		labEvidenceQuote: lab.source_text,
@@ -153,8 +187,9 @@ export async function runValidationPipeline(jobId: string, env: Env): Promise<vo
 		const staggerMs = parsePdfExtractStaggerMs(env);
 		if (staggerMs > 0) {
 			const sec = Math.round(staggerMs / 1000);
+			log.info("pdf_extract_stagger", { sec, reason: "tpm_spacing_between_pdfs" });
 			await patchJob(env, jobId, log, {
-				stageMessage: `Pausing ${sec}s before laboratory manual (avoids gpt-4o tokens-per-minute limits)…`,
+				stageMessage: "Preparing laboratory manual…",
 			});
 			await sleep(staggerMs);
 		}
