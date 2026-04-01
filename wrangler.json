@@ -2,6 +2,10 @@
 	"name": "protocol-validator",
 	"compatibility_date": "2025-07-18",
 	"main": "./server.ts",
+	"limits": {
+		"cpu_ms": 300000,
+		"subrequests": 100000
+	},
 	"assets": {
 		"directory": "./build/client"
 	},
