@@ -3,6 +3,8 @@
  * Session cookie lasts 1 hour.
  */
 
+import { isEmailInWhitelist } from "./whitelist";
+
 const SESSION_COOKIE_NAME = "pv_session";
 const SESSION_DURATION_MS = 60 * 60 * 1000; // 1 hour
 const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
@@ -43,18 +45,6 @@ export function extractSessionToken(request: Request): string | null {
 	if (!cookie) return null;
 	const match = cookie.match(new RegExp(`${SESSION_COOKIE_NAME}=([^;]+)`));
 	return match ? match[1] : null;
-}
-
-/** @deprecated Use isEmailInWhitelist from whitelist.ts with string[] */
-export function isEmailWhitelisted(email: string, whitelist: string): boolean {
-	if (!whitelist?.trim()) return false;
-	const emails = whitelist.split(",").map((e) => e.trim().toLowerCase());
-	return emails.includes(email.toLowerCase());
-}
-
-export function isEmailInWhitelist(email: string, emails: string[]): boolean {
-	if (!emails.length) return false;
-	return emails.includes(email.toLowerCase());
 }
 
 export function checkAuth(request: Request): SessionData | null {

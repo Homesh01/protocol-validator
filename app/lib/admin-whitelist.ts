@@ -36,7 +36,7 @@ export async function handleAdminWhitelist(
 	const authError = requireAdmin(request, env);
 	if (authError) return authError;
 
-	const json = (body: unknown) =>
+	const jsonResponse = (body: unknown) =>
 		new Response(JSON.stringify(body), {
 			headers: { "Content-Type": "application/json" },
 		});
@@ -44,7 +44,7 @@ export async function handleAdminWhitelist(
 	switch (request.method) {
 		case "GET": {
 			const emails = await getWhitelistEmails(env);
-			return json({ emails });
+			return jsonResponse({ emails });
 		}
 
 		case "POST": {
@@ -52,7 +52,7 @@ export async function handleAdminWhitelist(
 			try {
 				body = await request.json();
 			} catch {
-				return json({ error: "Invalid JSON" });
+				return jsonResponse({ error: "Invalid JSON" });
 			}
 			const email = typeof body.email === "string" ? body.email : "";
 			if (!email.trim()) {
@@ -63,7 +63,7 @@ export async function handleAdminWhitelist(
 			}
 			try {
 				const result = await addToWhitelist(env, email);
-				return json(result);
+				return jsonResponse(result);
 			} catch (e) {
 				return new Response(
 					JSON.stringify({
@@ -79,7 +79,7 @@ export async function handleAdminWhitelist(
 			try {
 				body = await request.json();
 			} catch {
-				return json({ error: "Invalid JSON" });
+				return jsonResponse({ error: "Invalid JSON" });
 			}
 			const email = typeof body.email === "string" ? body.email : "";
 			if (!email.trim()) {
@@ -89,7 +89,7 @@ export async function handleAdminWhitelist(
 				});
 			}
 			const result = await removeFromWhitelist(env, email);
-			return json(result);
+			return jsonResponse(result);
 		}
 
 		default:

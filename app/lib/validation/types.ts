@@ -9,21 +9,7 @@ export type JobStatus =
 	| "done"
 	| "error";
 
-export type ExtractedRow = {
-	analysis: string;
-	specimen: string;
-	timepoints: string[];
-	destination?: string;
-	evidencePage?: number;
-	/** Section or heading reference, e.g. "10.1", "Table 14", "Appendix B". */
-	evidenceSection?: string;
-	evidenceQuote?: string;
-};
-
-export type ProtocolRequirement = ExtractedRow & { id: string };
-export type LabClaim = ExtractedRow & { id: string };
-
-export type ResultStatus = "aligned" | "conflict" | "protocol_only" | "lab_only";
+export type ResultStatus = "aligned" | "conflict" | "lab_only";
 
 export type ValidationResultRow = {
 	key: string;

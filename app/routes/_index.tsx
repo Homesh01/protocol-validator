@@ -19,8 +19,6 @@ function statusStyles(status: ValidationResultRow["status"]): string {
 			return "bg-emerald-900/40 text-emerald-300 border-emerald-700/50";
 		case "conflict":
 			return "bg-amber-900/40 text-amber-200 border-amber-700/50";
-		case "protocol_only":
-			return "bg-sky-900/40 text-sky-200 border-sky-700/50";
 		case "lab_only":
 			return "bg-rose-900/40 text-rose-200 border-rose-700/50";
 		default:
@@ -34,8 +32,6 @@ function statusLabel(status: ValidationResultRow["status"]): string {
 			return "Aligned";
 		case "conflict":
 			return "Needs review";
-		case "protocol_only":
-			return "Only in protocol (legacy)";
 		case "lab_only":
 			return "Not in trial protocol";
 		default:
@@ -428,7 +424,7 @@ export default function Index() {
 	};
 
 	return (
-		<div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0612] px-4">
+		<div className="flex flex-col items-center justify-center px-4 py-12">
 			<div className="flex flex-col items-center gap-12">
 				<header className="flex flex-col items-center gap-6 text-center">
 					<h1 className="font-outfit text-3xl font-bold text-white md:text-4xl">
@@ -567,11 +563,7 @@ export default function Index() {
 										protocol pages, then a model check—open for quotes and notes.
 										Confirm in the PDFs.
 									</p>
-									<SummaryTable
-										rows={report.rows.filter(
-											(r) => r.status !== "protocol_only"
-										)}
-									/>
+									<SummaryTable rows={report.rows} />
 								</>
 							)}
 						</section>

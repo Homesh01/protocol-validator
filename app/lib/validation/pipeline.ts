@@ -159,7 +159,7 @@ export async function runValidationPipeline(jobId: string, env: Env): Promise<vo
 	try {
 		await patchJob(env, jobId, log, {
 			status: "extracting",
-			stageMessage: "Reading PDFs…",
+			stageMessage: "Extracting text from trial protocol PDF…",
 			error: undefined,
 		});
 
@@ -189,12 +189,12 @@ export async function runValidationPipeline(jobId: string, env: Env): Promise<vo
 			const sec = Math.round(staggerMs / 1000);
 			log.info("pdf_extract_stagger", { sec, reason: "tpm_spacing_between_pdfs" });
 			await patchJob(env, jobId, log, {
-				stageMessage: "Preparing laboratory manual…",
+				stageMessage: "Preparing to extract text from laboratory manual PDF…",
 			});
 			await sleep(staggerMs);
 		}
 		await patchJob(env, jobId, log, {
-			stageMessage: "Reading laboratory manual PDF…",
+			stageMessage: "Extracting text from laboratory manual PDF…",
 		});
 
 		const labPdf = await extractPdfPages(

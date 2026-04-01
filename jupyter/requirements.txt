@@ -7,5 +7,3 @@ pandas
 python-dotenv
 rapidfuzz
 openpyxl
-
-poker18

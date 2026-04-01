@@ -3,14 +3,17 @@ import { createRequestHandler, type ServerBuild } from "@remix-run/cloudflare";
 // @ts-ignore This file won’t exist if it hasn’t yet been built
 import * as build from "./build/server"; // eslint-disable-line import/no-unresolved
 import { getLoadContext } from "./load-context";
-import { checkAuthAndWhitelist, shouldProtectPath } from "./app/lib/auth";
+import {
+	checkAuthAndWhitelist,
+	clearSessionCookie,
+	shouldProtectPath,
+} from "./app/lib/auth";
 import { getWhitelistEmails } from "./app/lib/whitelist";
 import {
 	handleMagicLinkRequest,
 	handleMagicLinkVerify,
 } from "./app/lib/magic-link";
 import { handleAdminWhitelist } from "./app/lib/admin-whitelist";
-import { clearSessionCookie } from "./app/lib/auth";
 import { handleValidationApi } from "./app/lib/validation-http";
 import { runValidationPipeline } from "./app/lib/validation/pipeline";
 

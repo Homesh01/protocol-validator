@@ -14,6 +14,12 @@ const ERROR_MESSAGES: Record<string, string> = {
 	expired: "This link has expired. Please request a new one.",
 };
 
+type MagicLinkPostResponse = {
+	message?: string;
+	error?: string;
+	resendError?: string;
+};
+
 export default function Login() {
 	const [email, setEmail] = useState("");
 	const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -37,7 +43,7 @@ export default function Login() {
 				body: JSON.stringify({ email: email.trim() }),
 			});
 
-			const data = await res.json();
+			const data = (await res.json()) as MagicLinkPostResponse;
 
 			if (res.ok) {
 				setStatus("success");

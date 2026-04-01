@@ -2,8 +2,6 @@ import type { JobLogger } from "./log";
 import type { PdfPageText } from "./types";
 import { extractPdfTextWithOpenAI } from "./openai-pdf-text";
 
-export type { PdfPageText } from "./types";
-
 /**
  * PDF text via OpenAI Responses API (PDF as input_file). Avoids PDF.js, which
  * does not run reliably on Cloudflare Workers (workerd).
