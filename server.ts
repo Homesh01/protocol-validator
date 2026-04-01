@@ -52,6 +52,16 @@ export default {
 			const url = new URL(request.url);
 			const pathname = url.pathname;
 
+			// Quiet 404 for common scanner paths (avoids noisy Remix/stream errors)
+			if (
+				pathname.startsWith("/.svn/") ||
+				pathname.startsWith("/.git/") ||
+				pathname === "/.env" ||
+				pathname === "/.DS_Store"
+			) {
+				return new Response(null, { status: 404 });
+			}
+
 			if (pathname === "/api/auth/magic-link") {
 				return handleMagicLinkRequest(request, env);
 			}

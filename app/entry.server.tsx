@@ -8,6 +8,7 @@ import type { AppLoadContext, EntryContext } from "@remix-run/cloudflare";
 import { RemixServer } from "@remix-run/react";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
+import { serializeError } from "./lib/validation/log";
 
 const ABORT_DELAY = 5000;
 
@@ -34,8 +35,18 @@ export default async function handleRequest(
 			signal: controller.signal,
 			onError(error: unknown) {
 				if (!controller.signal.aborted) {
-					// Log streaming rendering errors from inside the shell
-					console.error(error);
+					// Must stringify: plain objects become "[object Object]" in Workers logs
+					const path = new URL(request.url).pathname;
+					console.error(
+						JSON.stringify({
+							ts: new Date().toISOString(),
+							level: "error",
+							msg: "remix_stream_render_error",
+							service: "protocol-validator",
+							path,
+							err: serializeError(error),
+						})
+					);
 				}
 				responseStatusCode = 500;
 			},
