@@ -1,0 +1,38 @@
+# Copy to .dev.vars for local development
+# These are loaded by wrangler dev
+
+# Fallback when KV whitelist is empty
+EMAIL_WHITELIST=your@email.com,another@company.com
+RESEND_API_KEY=re_xxxxxxxxxxxx
+APP_URL=http://localhost:8787
+
+# For production: use verified domain (e.g. Protocol Validator <noreply@yourdomain.com>)
+# Required to send to any email; onboarding@resend.dev only sends to your Resend signup email
+MAGIC_LINK_FROM=Protocol Validator <noreply@yourdomain.com>
+
+# For Admin API: add/remove whitelist emails via /api/admin/whitelist
+ADMIN_SECRET=your-admin-secret
+
+# Validation pipeline (PDF vs PDF; requires R2 bucket VALIDATION_R2 + queue protocol-validator-pipeline)
+# One-time queue (Workers Free: retention max 24h; default wrangler value is invalid on Free):
+#   pnpm exec wrangler queues create protocol-validator-pipeline --message-retention-period-secs 86400
+OPENAI_API_KEY=sk-...
+# Optional; default gpt-4o-mini (JSON extraction steps)
+# OPENAI_MODEL=gpt-4o
+# PDF→text uses Responses API; default gpt-4o (do not use 4o-mini for PDF)
+# OPENAI_PDF_MODEL=gpt-4o
+# OPENAI_PDF_MAX_OUTPUT_TOKENS=16384
+# Low gpt-4o TPM (~30k): burst control is ON by default (small first pass + ~70s between extra PDF calls).
+# OPENAI_PDF_LOW_TPM=false
+# OPENAI_PDF_LOW_TPM_FIRST_MAX=8192
+# OPENAI_PDF_LOW_TPM_GAP_MS=75000
+# Hard cap every PDF max_output: OPENAI_PDF_MAX_OUTPUT_REQUEST_CAP=12288
+# First pass only: OPENAI_PDF_INITIAL_MAX_OUTPUT=10000
+# Long PDFs: background Responses + poll (default). Set false only for debugging.
+# Files ≥ ~350KB still use background+store so retries do not hold one long POST open.
+# OPENAI_PDF_RESPONSES_BACKGROUND=false
+# OPENAI_PDF_POLL_MAX_MS=1500000
+# Continue pipeline if PDF→text is shorter than the heuristic minimum (poor results).
+# OPENAI_PDF_ALLOW_SHORT=true
+# Default ~55s pause between protocol vs lab PDF (gpt-4o TPM). Set 0 to skip (riskier on 30k TPM tiers).
+# OPENAI_PDF_EXTRACT_STAGGER_MS=0
