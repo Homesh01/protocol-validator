@@ -14,6 +14,9 @@ import { getWhitelistEmails } from "./lib/whitelist";
 
 import "./tailwind.css";
 
+/** Avoid white flash before the Tailwind bundle loads (separate request after HTML). */
+const CRITICAL_CSS = `:root{color-scheme:dark}html{background-color:#0a0612}body{margin:0;background-color:#0a0612;color:#f9fafb;font-family:system-ui,sans-serif}`;
+
 export async function loader({ request, context }: LoaderFunctionArgs) {
 	const env = context.cloudflare.env as Env;
 	const whitelistEmails = await getWhitelistEmails(env);
@@ -45,6 +48,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 				<meta charSet="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
 				<meta name="theme-color" content="#0a0612" />
+				<style dangerouslySetInnerHTML={{ __html: CRITICAL_CSS }} />
 				<Meta />
 				<Links />
 			</head>
